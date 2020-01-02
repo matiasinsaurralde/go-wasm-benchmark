@@ -69,6 +69,7 @@ func BenchmarkWagonSum(b *testing.B) {
 		if err != nil {
 			b.Fatalf("could not create VM: %v", err)
 		}
+		defer vm.Close()
 
 		var funcCode int64
 		for name, e := range m.Export.Entries {
@@ -105,6 +106,7 @@ func BenchmarkWagonSumReentrant(b *testing.B) {
 	}
 	for n := 0; n < b.N; n++ {
 		vm.ExecCode(funcCode, 5, 37)
+		vm.Restart()
 	}
 }
 
