@@ -14,15 +14,18 @@ import (
 )
 
 const (
-	funcName = "sum"
+	funcName        = "sum"
+	cstringFuncName = "somecall"
 )
 
 var (
-	simpleWasmBytes []byte
+	simpleWasmBytes  []byte
+	cstringWasmBytes []byte
 )
 
 func init() {
 	simpleWasmBytes, _ = ioutil.ReadFile("simple.wasm")
+	cstringWasmBytes, _ = ioutil.ReadFile("cstring.wasm")
 }
 
 func BenchmarkWasmerSum(b *testing.B) {
@@ -165,5 +168,95 @@ func BenchmarkWASM3SumReentrant(b *testing.B) {
 			b.Fatal(err)
 		}
 		fn(5, 37)
+	}
+}
+
+func BenchmarkWASM3CString(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		env := wasm3.NewEnvironment()
+		defer env.Destroy()
+		runtime := wasm3.NewRuntime(env, 64*1024)
+		defer runtime.Destroy()
+		_, err := runtime.Load(cstringWasmBytes)
+		if err != nil {
+			b.Fatal(err)
+		}
+		fn, err := runtime.FindFunction(cstringFuncName)
+		if err != nil {
+			b.Fatal(err)
+		}
+		result := fn()
+		memoryLength := runtime.GetAllocatedMemoryLength()
+		mem := runtime.GetMemory(memoryLength, 0)
+		buf := new(bytes.Buffer)
+		for n := 0; n < memoryLength; n++ {
+			if n < result {
+				continue
+			}
+			value := mem[n]
+			if value == 0 {
+				break
+			}
+			buf.WriteByte(value)
+		}
+	}
+}
+
+func BenchmarkWASM3CStringReentrant(b *testing.B) {
+	env := wasm3.NewEnvironment()
+	defer env.Destroy()
+	runtime := wasm3.NewRuntime(env, 64*1024)
+	defer runtime.Destroy()
+	_, err := runtime.Load(cstringWasmBytes)
+	if err != nil {
+		b.Fatal(err)
+	}
+	fn, err := runtime.FindFunction(cstringFuncName)
+	if err != nil {
+		b.Fatal(err)
+	}
+	for n := 0; n < b.N; n++ {
+		result := fn()
+		memoryLength := runtime.GetAllocatedMemoryLength()
+		mem := runtime.GetMemory(memoryLength, 0)
+		buf := new(bytes.Buffer)
+		for n := 0; n < memoryLength; n++ {
+			if n < result {
+				continue
+			}
+			value := mem[n]
+			if value == 0 {
+				break
+			}
+			buf.WriteByte(value)
+		}
+	}
+}
+
+func BenchmarkWasmerCString(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		instance, err := wasmer_wasm.NewInstance(cstringWasmBytes)
+		if err != nil {
+			b.Fatal(err)
+		}
+		defer instance.Close()
+		somecall := instance.Exports[cstringFuncName]
+		ptr, err := somecall()
+		if err != nil {
+			b.Fatal(err)
+		}
+		mem := instance.Memory.Data()
+		buf := new(bytes.Buffer)
+		i := int(ptr.ToI32())
+		for n := 0; n < len(mem); n++ {
+			if n < i {
+				continue
+			}
+			value := mem[n]
+			if value == 0 {
+				break
+			}
+			buf.WriteByte(value)
+		}
 	}
 }
