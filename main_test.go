@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-interpreter/wagon/exec"
 	wagon_wasm "github.com/go-interpreter/wagon/wasm"
+	wasm3 "github.com/matiasinsaurralde/go-wasm3"
 	life_wasm "github.com/perlin-network/life/exec"
 	wasmer_wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
@@ -128,5 +129,41 @@ func BenchmarkLifeSum(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func BenchmarkWASM3Sum(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		env := wasm3.NewEnvironment()
+		defer env.Destroy()
+		runtime := wasm3.NewRuntime(env, 64*1024)
+		defer runtime.Destroy()
+		_, err := runtime.Load(simpleWasmBytes)
+		if err != nil {
+			b.Fatal(err)
+		}
+		fn, err := runtime.FindFunction(funcName)
+		if err != nil {
+			b.Fatal(err)
+		}
+		fn(5, 37)
+	}
+}
+
+func BenchmarkWASM3SumReentrant(b *testing.B) {
+	env := wasm3.NewEnvironment()
+	defer env.Destroy()
+	runtime := wasm3.NewRuntime(env, 64*1024)
+	defer runtime.Destroy()
+	_, err := runtime.Load(simpleWasmBytes)
+	if err != nil {
+		b.Fatal(err)
+	}
+	for n := 0; n < b.N; n++ {
+		fn, err := runtime.FindFunction(funcName)
+		if err != nil {
+			b.Fatal(err)
+		}
+		fn(5, 37)
 	}
 }
